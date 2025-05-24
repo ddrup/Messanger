@@ -3,6 +3,8 @@
 #include <queue>
 #include <unordered_set>
 
+#include "database.h"
+
 namespace io = boost::asio;
 using tcp = io::ip::tcp;
 using error_code = boost::system::error_code;
@@ -56,7 +58,7 @@ class session : public std::enable_shared_from_this<session> {
                     std::bind(&session::on_write, shared_from_this(), _1, _2));
   }
 
-  void on_write(error_code error, std::size_t bytes_transferred) {
+  void on_write(error_code error, std::size_t /* bytes_transferred */) {
     if (!error) {
       outgoing.pop();
 
@@ -85,7 +87,7 @@ class server {
   void async_accept() {
     socket.emplace(io_context);
 
-    acceptor.async_accept(*socket, [&](error_code error) {
+    acceptor.async_accept(*socket, [&](error_code /* error */) {
       auto client = std::make_shared<session>(std::move(*socket));
       client->post("Welcome to chat\n\r");
       post("We have a newcomer\n\r");
@@ -118,6 +120,8 @@ class server {
 };
 
 int main() {
+  auto& storage = initStorage("my-server.db");
+
   io::io_context io_context;
   server srv(io_context, 15001);
   srv.async_accept();

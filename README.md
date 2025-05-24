@@ -1,6 +1,7 @@
 Чтобы запустить сервер можно использовать \
-`g++ async_tcp_server.cpp -o server`
-`./server`
+```bash
+cmake -B build \
+  -DCMAKE_TOOLCHAIN_FILE=~/tools/vcpkg/scripts/buildsystems/vcpkg.cmake \
+cmake --build build \
+```
 
-Чтобы подключиться к серверу нужно \
-`telnet localhost 15001`
