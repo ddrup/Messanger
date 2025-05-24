@@ -10,17 +10,21 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 find_package(Boost 1.66 REQUIRED COMPONENTS system)
 find_package(SqliteOrm REQUIRED)
+find_package(unofficial-sodium CONFIG REQUIRED)
 
 # Клиент
 add_executable(client
     client.cpp
 )
+
 target_link_libraries(client
     PRIVATE
         Boost::system
         sqlite_orm::sqlite_orm
+        unofficial-sodium::sodium
         pthread
 )
+
 if (CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
     target_compile_options(client PRIVATE -Wall -Wextra -pedantic)
 endif()
@@ -33,6 +37,7 @@ target_link_libraries(server
     PRIVATE
         Boost::system
         sqlite_orm::sqlite_orm
+        unofficial-sodium::sodium
         pthread
 )
 if (CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")

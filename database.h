@@ -17,7 +17,7 @@ inline auto &initStorage(const std::string &dbPath = "users.db") {
           sqlite_orm::make_column("id", &User::id, sqlite_orm::primary_key().autoincrement()),
           sqlite_orm::make_column("login", &User::login, sqlite_orm::unique()),
           sqlite_orm::make_column("passhash", &User::passhash)));
-          
+
   storage.sync_schema();
   return storage;
 }

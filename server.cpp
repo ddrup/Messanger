@@ -1,8 +1,10 @@
 #include <boost/asio.hpp>
 #include <optional>
 #include <queue>
+#include <string>
 #include <unordered_set>
 
+#include "commands.h"
 #include "database.h"
 
 namespace io = boost::asio;
@@ -13,17 +15,24 @@ using namespace std::placeholders;
 using message_handler = std::function<void(std::string)>;
 using error_handler = std::function<void()>;
 
-class session : public std::enable_shared_from_this<session> {
- public:
-  session(tcp::socket&& socket) : socket(std::move(socket)) {}
+static constexpr auto WELCOME_MSG =
+    "Server: Welcome to chat\r\n"
+    "To register:    REGISTER <login> <password>\r\n"
+    "To login:       LOGIN    <login> <password>\r\n";
 
-  void start(message_handler&& on_message, error_handler&& on_error) {
+class session : public std::enable_shared_from_this<session> {
+public:
+  template <typename Storage>
+  session(tcp::socket &&socket, Storage &storage)
+      : socket(std::move(socket)), db(storage) {}
+
+  void start(message_handler &&on_message, error_handler &&on_error) {
     this->on_message = std::move(on_message);
     this->on_error = std::move(on_error);
     async_read();
   }
 
-  void post(const std::string& message) {
+  void post(const std::string &message) {
     bool idle = outgoing.empty();
     outgoing.push(message);
 
@@ -32,7 +41,7 @@ class session : public std::enable_shared_from_this<session> {
     }
   }
 
- private:
+private:
   void async_read() {
     io::async_read_until(
         socket, streambuf, "\n",
@@ -41,11 +50,18 @@ class session : public std::enable_shared_from_this<session> {
 
   void on_read(error_code error, std::size_t bytes_transferred) {
     if (!error) {
-      std::stringstream message;
-      message << socket.remote_endpoint(error) << ": "
-              << std::istream(&streambuf).rdbuf();
+      auto begin = boost::asio::buffers_begin(streambuf.data());
+      std::string line(begin, begin + bytes_transferred - 1);
       streambuf.consume(bytes_transferred);
-      on_message(message.str());
+
+      if (!is_logged_in()) {
+        auto res = handle_command(line, db);
+        post(res.message);
+        current_user = res.user;
+      } else {
+        // TODO: process messages after login
+      }
+      
       async_read();
     } else {
       socket.close(error);
@@ -71,26 +87,33 @@ class session : public std::enable_shared_from_this<session> {
     }
   }
 
+  bool is_logged_in() const { return static_cast<bool>(current_user); }
+
   tcp::socket socket;
   io::streambuf streambuf;
   std::queue<std::string> outgoing;
   message_handler on_message;
   error_handler on_error;
+  std::optional<std::string> current_user;
+  decltype(initStorage()) &db;
 };
 
 class server {
- public:
-  server(io::io_context& io_context, std::uint16_t port)
+public:
+  template <typename Storage>
+  server(io::io_context &io_context, std::uint16_t port, Storage &storage)
       : io_context(io_context),
-        acceptor(io_context, tcp::endpoint(tcp::v4(), port)) {}
+        acceptor(io_context, tcp::endpoint(tcp::v4(), port)),
+        db(storage) {}
 
   void async_accept() {
     socket.emplace(io_context);
 
     acceptor.async_accept(*socket, [&](error_code /* error */) {
-      auto client = std::make_shared<session>(std::move(*socket));
-      client->post("Welcome to chat\n\r");
-      post("We have a newcomer\n\r");
+      auto client = std::make_shared<session>(std::move(*socket), db);
+      client->post(WELCOME_MSG);
+
+      // post("We have a newcomer\n\r");
 
       clients.insert(client);
 
@@ -98,7 +121,7 @@ class server {
                     [&, weak = std::weak_ptr(client)] {
                       if (auto shared = weak.lock();
                           shared && clients.erase(shared)) {
-                        post("We are one less\n\r");
+                        // post("We are one less\n\r");
                       }
                     });
 
@@ -106,24 +129,27 @@ class server {
     });
   }
 
-  void post(const std::string& message) {
-    for (auto& client : clients) {
+  // don't need, write not common chat
+  void post(const std::string &message) {
+    for (auto &client : clients) {
       client->post(message);
     }
   }
 
- private:
-  io::io_context& io_context;
+
+private:
+  io::io_context &io_context;
   tcp::acceptor acceptor;
   std::optional<tcp::socket> socket;
   std::unordered_set<std::shared_ptr<session>> clients;
+  decltype(initStorage()) &db;
 };
 
 int main() {
-  auto& storage = initStorage("my-server.db");
-
+  std::cout << "start\n";
+  auto &storage = initStorage("user.db");
   io::io_context io_context;
-  server srv(io_context, 15001);
+  server srv(io_context, 15001, storage);
   srv.async_accept();
   io_context.run();
   return 0;
