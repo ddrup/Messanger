@@ -17,8 +17,19 @@ using error_handler = std::function<void()>;
 
 static constexpr auto WELCOME_MSG =
     "Server: Welcome to chat\r\n"
+    "===========================================\r\n"
     "To register:    REGISTER <login> <password>\r\n"
-    "To login:       LOGIN    <login> <password>\r\n";
+    "To login:       LOGIN    <login> <password>\r\n"
+    "===========================================\r\n";
+
+static constexpr auto LOBBY_MSG  =
+    "Server: you are in the lobby.\r\n"
+    "Server: available commands:\r\n"
+    "===========================================\r\n"
+    "  CHAT  <login>   — start chat with user\r\n"
+    "  LIST           — show online users\r\n"
+    "  LOGOUT         — log out\r\n"
+    "===========================================\r\n";
 
 class session : public std::enable_shared_from_this<session> {
 public:
@@ -55,13 +66,17 @@ private:
       streambuf.consume(bytes_transferred);
 
       if (!is_logged_in()) {
-        auto res = handle_command(line, db);
-        post(res.message);
-        current_user = res.user;
+        auto res = handle_auth_command(line, db);
+        post("Server: " + res.message);
+        if (res.success) {
+          current_user = res.user; // logged in
+          post(LOBBY_MSG);
+        }
       } else {
         // TODO: process messages after login
+        auto res = handle_lobby_command(line, db);
       }
-      
+
       async_read();
     } else {
       socket.close(error);
@@ -87,7 +102,8 @@ private:
     }
   }
 
-  bool is_logged_in() const { return static_cast<bool>(current_user); }
+  bool is_logged_in() const { return current_user.has_value(); }
+  bool in_chat() const { return current_peer.has_value(); }
 
   tcp::socket socket;
   io::streambuf streambuf;
@@ -95,6 +111,7 @@ private:
   message_handler on_message;
   error_handler on_error;
   std::optional<std::string> current_user;
+  std::optional<std::string> current_peer;
   decltype(initStorage()) &db;
 };
 
@@ -103,8 +120,7 @@ public:
   template <typename Storage>
   server(io::io_context &io_context, std::uint16_t port, Storage &storage)
       : io_context(io_context),
-        acceptor(io_context, tcp::endpoint(tcp::v4(), port)),
-        db(storage) {}
+        acceptor(io_context, tcp::endpoint(tcp::v4(), port)), db(storage) {}
 
   void async_accept() {
     socket.emplace(io_context);
@@ -136,7 +152,6 @@ public:
     }
   }
 
-
 private:
   io::io_context &io_context;
   tcp::acceptor acceptor;
@@ -146,7 +161,6 @@ private:
 };
 
 int main() {
-  std::cout << "start\n";
   auto &storage = initStorage("user.db");
   io::io_context io_context;
   server srv(io_context, 15001, storage);

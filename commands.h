@@ -36,7 +36,8 @@ struct CommandResult {
 };
 
 template <typename Storage>
-inline CommandResult handle_command(const std::string &line, Storage &storage) {
+inline CommandResult handle_auth_command(const std::string &line,
+                                         Storage &storage) {
   std::vector<std::string> parts;
   boost::split(parts, line, boost::is_any_of(" "), boost::token_compress_on);
   if (parts.empty()) {
@@ -53,10 +54,11 @@ inline CommandResult handle_command(const std::string &line, Storage &storage) {
     const std::string &pass = parts[2];
     try {
       User u{0, login, hash_password(pass)};
-      std::cout << "registration\n";
       storage.insert(u);
+      std::cerr << "registration\n";
       return {true, "OK Registered user '" + login + "'\n", parts[1]};
     } catch (const std::exception &e) {
+      std::cerr << "no registration\n";
       return {false, std::string{"ERROR "} + e.what() + "\n"};
     }
   } else if (cmd == "LOGIN") {
@@ -74,10 +76,47 @@ inline CommandResult handle_command(const std::string &line, Storage &storage) {
 
     const auto &u = users.front();
 
-    if (crypto_pwhash_str_verify(u.passhash.c_str(), pass.c_str(), pass.size()) != 0)
+    if (crypto_pwhash_str_verify(u.passhash.c_str(), pass.c_str(),
+                                 pass.size()) != 0)
       return {false, "ERROR Invalid password\n"};
 
     return {true, "OK Logged in as '" + login + "'\n", parts[1]};
   }
   return {false, "ERROR Unknown command\n"};
 }
+
+template <typename Storage>
+inline CommandResult handle_lobby_command(const std::string &line,
+                                          Storage &storage) {
+  std::vector<std::string> parts;
+  boost::split(parts, line, boost::is_any_of(" "), boost::token_compress_on);
+  if (parts.empty()) {
+    return {false, "ERROR Empty command\n"};
+  }
+
+  auto cmd = parts[0];
+
+  if (cmd == "CHAT") {
+    if (parts.size() != 3)
+      return {false, "ERROR Usage: REGISTER <login> <password>\n"};
+
+    const std::string &login = parts[1];
+    const std::string &pass = parts[2];
+    try {
+      User u{0, login, hash_password(pass)};
+      storage.insert(u);
+      return {true, "OK Registered user '" + login + "'\n", parts[1]};
+    } catch (const std::exception &e) {
+      return {false, std::string{"ERROR "} + e.what() + "\n"};
+    }
+  } else if (cmd == "LOGOUT") {
+    
+  } else if (cmd == "LIST") {
+    
+  }
+  return {false, "ERROR Unknown command\n"};
+}
+
+// template <typename Storage>
+// inline CommandResult handle_chat_command(const std::string &line,
+//                                          Storage &storage) {}

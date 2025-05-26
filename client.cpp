@@ -75,8 +75,7 @@ private:
             std::cerr << "Read error: " << error.message() << "\n";
           } else {
             std::stringstream message;
-            message << self->socket.remote_endpoint(error) << ": "
-                    << std::istream(&self->streambuf).rdbuf();
+            message << std::istream(&self->streambuf).rdbuf();
             self->streambuf.consume(bytes_transferred);
 
             std::cout << message.str();
