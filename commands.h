@@ -1,6 +1,7 @@
 #pragma once
 
 #include <boost/algorithm/string.hpp>
+#include <exception>
 #include <functional>
 #include <iostream>
 #include <sodium.h>
@@ -88,6 +89,7 @@ inline CommandResult handle_auth_command(const std::string &line,
 template <typename Storage>
 inline CommandResult handle_lobby_command(const std::string &line,
                                           Storage &storage) {
+  using namespace sqlite_orm;
   std::vector<std::string> parts;
   boost::split(parts, line, boost::is_any_of(" "), boost::token_compress_on);
   if (parts.empty()) {
@@ -97,26 +99,52 @@ inline CommandResult handle_lobby_command(const std::string &line,
   auto cmd = parts[0];
 
   if (cmd == "CHAT") {
-    if (parts.size() != 3)
-      return {false, "ERROR Usage: REGISTER <login> <password>\n"};
+    if (parts.size() != 2)
+      return {false, "ERROR Usage: CHAT <login>\n"};
 
-    const std::string &login = parts[1];
-    const std::string &pass = parts[2];
+    const std::string peer_login = parts[1];
     try {
-      User u{0, login, hash_password(pass)};
-      storage.insert(u);
-      return {true, "OK Registered user '" + login + "'\n", parts[1]};
+      if (storage.template count<User>(where(c(&User::login) == peer_login)) ==
+          0)
+        throw std::runtime_error("no such user");
+      return {true, "chat", peer_login};
     } catch (const std::exception &e) {
+      std::cerr << e.what() << "\n";
       return {false, std::string{"ERROR "} + e.what() + "\n"};
     }
   } else if (cmd == "LOGOUT") {
-    
+    if (parts.size() != 1)
+      return {false, "ERROR Usage: LOGOUT\n"};
+    return {true, "logout"};
   } else if (cmd == "LIST") {
-    
+    if (parts.size() != 1)
+      return {false, "ERROR Usage: LIST\n"};
+
+    return {true, "list"};
   }
   return {false, "ERROR Unknown command\n"};
 }
 
-// template <typename Storage>
-// inline CommandResult handle_chat_command(const std::string &line,
-//                                          Storage &storage) {}
+template <typename Storage>
+inline CommandResult handle_chat_command(const std::string &line,
+                                         Storage &storage) {
+  using namespace sqlite_orm;
+  std::vector<std::string> parts;
+  boost::split(parts, line, boost::is_any_of(" "), boost::token_compress_on);
+  if (parts.empty()) {
+    return {false, "ERROR Empty command\n"};
+  }
+
+  auto cmd = parts[0];
+
+  if (cmd == "/exit") {
+    if (parts.size() != 1)
+      return {false, "ERROR Usage: /exit\n"};
+
+    return {true, "exit"};
+  } else if (cmd == "/who") {
+
+  } else {
+
+  }
+}
