@@ -9,7 +9,7 @@
 #include <string>
 #include <vector>
 
-#include "database.h"
+#include "database.hpp"
 
 inline std::string hash_password(const std::string &pass) {
   if (sodium_init() < 0) {
@@ -34,6 +34,7 @@ struct CommandResult {
   bool success;
   std::string message;
   std::string user = "";
+  int n = 0;
 };
 
 template <typename Storage>
@@ -92,6 +93,7 @@ inline CommandResult handle_lobby_command(const std::string &line,
   using namespace sqlite_orm;
   std::vector<std::string> parts;
   boost::split(parts, line, boost::is_any_of(" "), boost::token_compress_on);
+
   if (parts.empty()) {
     return {false, "ERROR Empty command\n"};
   }
@@ -99,36 +101,45 @@ inline CommandResult handle_lobby_command(const std::string &line,
   auto cmd = parts[0];
 
   if (cmd == "CHAT") {
-    if (parts.size() != 2)
+
+    if (parts.size() != 2) {
       return {false, "ERROR Usage: CHAT <login>\n"};
+    }
 
     const std::string peer_login = parts[1];
+
     try {
+
       if (storage.template count<User>(where(c(&User::login) == peer_login)) ==
-          0)
+          0) {
         throw std::runtime_error("no such user");
+      }
+
       return {true, "chat", peer_login};
     } catch (const std::exception &e) {
+
       std::cerr << e.what() << "\n";
       return {false, std::string{"ERROR "} + e.what() + "\n"};
     }
   } else if (cmd == "LOGOUT") {
-    if (parts.size() != 1)
+
+    if (parts.size() != 1) {
       return {false, "ERROR Usage: LOGOUT\n"};
+    }
+
     return {true, "logout"};
   } else if (cmd == "LIST") {
-    if (parts.size() != 1)
+
+    if (parts.size() != 1) {
       return {false, "ERROR Usage: LIST\n"};
+    }
 
     return {true, "list"};
   }
   return {false, "ERROR Unknown command\n"};
 }
 
-template <typename Storage>
-inline CommandResult handle_chat_command(const std::string &line,
-                                         Storage &storage) {
-  using namespace sqlite_orm;
+inline CommandResult handle_chat_command(const std::string &line) {
   std::vector<std::string> parts;
   boost::split(parts, line, boost::is_any_of(" "), boost::token_compress_on);
   if (parts.empty()) {
@@ -138,13 +149,25 @@ inline CommandResult handle_chat_command(const std::string &line,
   auto cmd = parts[0];
 
   if (cmd == "/exit") {
-    if (parts.size() != 1)
+    if (parts.size() != 1) {
       return {false, "ERROR Usage: /exit\n"};
+    }
 
     return {true, "exit"};
   } else if (cmd == "/who") {
+    if (parts.size() != 1) {
+      return {false, "ERROR Usage: /who\n"};
+    }
 
+    return {true, "who"};
+
+  } else if (cmd == "/history") {
+    if (parts.size() != 2) {
+      return {false, "ERROR Usage: /history <N>\n"};
+    }
+
+    return {true, "history", "", stoi(parts[1])};
   } else {
-
+    return {true, line};
   }
 }
